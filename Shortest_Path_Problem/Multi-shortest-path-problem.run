@@ -1,0 +1,109 @@
+
+
+reset ;
+
+
+model rutas.mod	;
+data  rutas.dat	;
+
+
+/* CPLEX */
+#option solver ./cplex						;
+# option cplex_options 'time=5'					;
+# option show_stats 1						;
+# option cplex_options 'primal mipdisplay=2 probe=3 nodefile=3'	;
+
+
+/* GUROBI */
+option solver "./gurobi"					;
+# option gurobi_options 'threads= 3 ' 				;
+option solver_msg 0 						;
+option DisplayInterval 1 					;
+option gurobi_options 'outlev 1 logfreq 1 timing 1 ' 		;
+option presolve 10 						;
+option show_stats 1 						;
+# option gurobi_options 'timelim = 3600 return_mipgap 2 ' 	;
+
+
+param Ttotal default 0			;
+let Ttotal := time()			;
+solve					;
+let Ttotal := time() - Ttotal		;
+printf "\n\n"				;
+printf "Tiempo CPU: %d\n", Ttotal 	;
+
+
+printf "\n"		;
+param o default 0	;
+param bandera default 0	;
+for {r in rutas}{
+	let o := origen[r] 			;
+	let bandera := 0  			;
+	printf "RUTA %d ::::: %d", r, o		;
+	for {i in nodos}{
+		for {j in nodos: (o,j) in arcos and x[o,j,r] == 1}{
+			printf " -> %d", j 		;
+			let o := j 			;
+			if j == destino[r] then {
+				printf "\n\n"		;
+				let bandera := 1 	;
+				break 			;
+			}
+		}
+		if bandera == 1 then {
+			break 				;
+		}
+	}
+}
+
+
+printf "\n["					;
+for {r in rutas}{
+	printf "[" 				;
+	for {(i,j) in arcos: x[i,j,r] == 1}{
+		printf "(%d,%d), ", i, j 	;
+	}
+	printf "]," 				;
+}
+printf "]" 					;
+
+
+printf "\n"					;
+printf "\n["					;
+for {r in rutas}{
+	let o := origen[r] 			;
+	let bandera := 0  			;
+	printf "[%d, ", o			;
+	for {i in nodos}{
+		for {j in nodos: (o,j) in arcos and x[o,j,r] == 1}{
+			printf "%d, ", j 		;
+			let o := j 			;
+			if j == destino[r] then {
+				printf "],"		;
+				let bandera := 1 	;
+				break 			;
+			}
+		}
+		if bandera == 1 then {
+			break 				;
+		}
+	}
+}
+printf "]\n\n" 						;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

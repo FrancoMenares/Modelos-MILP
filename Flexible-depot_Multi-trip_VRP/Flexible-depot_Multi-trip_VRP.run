@@ -1,0 +1,89 @@
+
+reset ;
+
+model Flexible-depot_Multi-trip_VRP.mod	;
+data  Flexible-depot_Multi-trip_VRP.dat	;
+
+
+/* GUROBI */
+option solver gurobi										;
+# option gurobi_options 'threads= 3 ' 						;
+#option solver_msg 0 										;
+#option DisplayInterval 1 									;
+#option gurobi_options 'outlev 1 logfreq 1 timing 1 ' 		;
+#option presolve 10 										;
+#option show_stats 1 										;
+# option gurobi_options 'timelim = 3600 return_mipgap 2 ' 	;
+
+
+param Ttotal default 0				;
+let Ttotal := time()				;
+solve								;
+let Ttotal := time() - Ttotal		;
+printf "\n\n"						;
+printf "Tiempo CPU: %d\n", Ttotal 	;
+
+
+/* 
+printf "\n\n"	;
+param origen default 0	;
+for {k in K: sum{(i, j) in A, v in V}x[i,j,k,v] > 0}{
+	printf " Vehiculo %s ::::::: \n", k	;
+	for {v in V: sum{(i, j) in A}x[i,j,k,v] > 0}{
+		printf "\t ::::::: Vuelta %s \n", v	;
+		for {d in D: sum{j in N: (d, j) in A}x[d,j,k,v] > 0}{
+			let origen := d	;
+			printf "\t %s -> ", origen	;
+			for {r in N}{
+				for {j in N: (origen, j) in A and x[origen,j,k,v] == 1}{
+					printf "%s", j	;
+					let origen := j	;
+					if origen in D then {
+						break	;
+					}
+					printf " -> "	;
+				}
+				if origen in D then {
+					break	;
+				}
+			}
+			printf "\n"	;
+		}
+		printf "\n"	;
+	}
+	printf "\n"	;
+} 
+*/
+
+
+for {k in K: sum {(i,j) in A, v in V} x[i,j,k,v] > 0}{
+	for {v in V: sum {(i,j) in A} x[i,j,k,v] > 0}{
+		for {(i,j) in A: x[i,j,k,v] == 1}{
+			printf "%s %s -> (%s[%d] %s[%d])\n", k,v,i,c[i,k,v],j,c[j,k,v] ;
+		}
+		printf "\n";
+	}
+	printf "\n";
+}
+
+
+/* printf "\n";
+printf "R2\n";
+for {d in D, k in K, v in V: v!=1}{
+	printf "%s %s %s: %s <= %s\n", d, k, v, sum {j in C : (d,j) in A} x[d,j,k,v], compatible[d,k] ;
+}
+
+printf "\n";
+printf "R3\n";
+for {d in D, k in K, v in V} {
+	printf "%s %s %s: %s <= %s\n", d, k, v, sum {i in C : (i,d) in A} x[i,d,k,v], compatible[d,k] ;
+} 
+*/
+
+
+/* printf "\n";
+printf "\n";
+for {(i,j) in A0, k in K, v in V: v > 1}{
+	printf "%s %s %s %s : %s >= %s\n", i,j,k,v, c[j,k,v], c[i,k,v-1] ;
+} */
+	
