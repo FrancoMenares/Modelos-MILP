@@ -2,66 +2,153 @@ reset ;
 
 model Flexible-depot_Multi-trip_VRP.mod	;
 data  Flexible-depot_Multi-trip_VRP.dat	;
+# data  b-Instancia11_cap2_relacion1TodosTodosTodos.dat	;
 
 
 /* GUROBI */
-option solver "./gurobi"										;
-# option gurobi_options 'threads= 3 ' 						;
-#option solver_msg 0 										;
-#option DisplayInterval 1 									;
-option gurobi_options 'outlev=1 logfreq=1 timing=1 ' 		;
-#option presolve 10 										;
-option show_stats 1 										;
-# option gurobi_options 'timelim = 3600 return_mipgap 2 ' 	;
+option solver "./gurobi"				 ;
+option gurobi_options 'outlev=1 logfreq=1 timing=1 bestbound=1 timelim=3600 threads=1';
+#option gurobi_options 'return_mipgap 2'  ;
+option show_stats 1 					 ;
 
 
 param Ttotal default 0				;
 let Ttotal := time()				;
 solve								;
 let Ttotal := time() - Ttotal		;
-printf "\n\n"						;
-printf "Tiempo CPU: %d\n", Ttotal 	;
+printf "\n"							;
 
 
-/*
-printf "\n\n"	;
-param origen default 0	;
-for {k in K: sum{(i, j) in A, v in V}x[i,j,k,v] > 0}{
-	printf " Vehiculo %s ::::::: \n", k	;
-	for {v in V: sum{(i, j) in A}x[i,j,k,v] > 0}{
-		printf "\t ::::::: Vuelta %s \n", v	;
-		for {d in D: sum{j in N: (d, j) in A}x[d,j,k,v] > 0}{
-			let origen := d	;
-			printf "\t %s -> ", origen	;
-			for {r in N}{
-				for {j in N: (origen, j) in A and x[origen,j,k,v] == 1}{
-					printf "%s", j	;
-					let origen := j	;
-					if origen in D then {
-						break	;
-					}
-					printf " -> "	;
+set all_depots := D_start union D_in union D_end ;
+set depots default {} ;
+set depots_in default {} ;
+set rounds default {} ;
+
+param number_of_rounds{K} default 0 ;
+param number_of_depots{K} default 0 ;
+param number_of_depots_in{K} default 0 ;
+
+# TODO: No se calculan por ahora
+# param change_depot_rate{K} default 0 ;
+# param change_depot_in_rate{K} default 0 ;
+
+param inicial_depot default 0 ;
+param current_depot default 0 ;
+set visited_client default {} ;
+set visited_client_aux default {} ;
+param depot_to_client_distance_reduction{K} default 0 ;
+param depot_to_client_distance_reduction_v2{K,V} default 0 ;
+
+printf "RUTAS\n"							;
+for {k in K: sum {(i,j) in A, v in V} x[i,j,k,v] > 0 }{
+
+	let depots := {} ;
+	let depots_in := {} ;
+	let rounds := {} ;
+	let visited_client := {} ;
+	for {v in V: sum {(i,j) in A} x[i,j,k,v] > 0 }{
+		
+		let visited_client_aux := {} ;
+		for {(i,j) in A: x[i,j,k,v] == 1}{
+			/* primer deposito de la ruta y de cada vuelta */
+			if (i in D_start or i in D_in) and j not in D_end then {
+				if v == 1 and i in D_start then {
+					let inicial_depot := i ;
 				}
-				if origen in D then {
-					break	;
+				let current_depot := i ;
+				if i in D_in then {
+					let current_depot := current_depot -10000 ;
 				}
 			}
-			printf "\n"	;
+			/* visitas a cliente*/
+			if j in C and j then {
+				let visited_client_aux := visited_client_aux union {j} ;
+			}
 		}
-		printf "\n"	;
-	}
-	printf "\n"	;
-}
-*/
-
-
-for {k in K: sum {(i,j) in A, v in V} x[i,j,k,v] > 0}{
-	for {v in V: sum {(i,j) in A} x[i,j,k,v] > 0}{
+		
+		/* reducion de la distancia */
+		for {i in C: i not in visited_client}{
+			let depot_to_client_distance_reduction[k] := depot_to_client_distance_reduction[k] + time_[inicial_depot,i] - time_[current_depot,i] ;
+			let depot_to_client_distance_reduction_v2[k,v] := depot_to_client_distance_reduction_v2[k,v] + time_[inicial_depot,i] - time_[current_depot,i] ;
+		}
+		
+		/* vueltas utilizadas */
+		if v not in rounds then {
+			let rounds := rounds union {v} ;
+		}		
+	
 		for {(i,j) in A: x[i,j,k,v] == 1}{
-			printf "%s %s -> (%s[%d] %s[%d])\n", k,v,i,t[i,k,v],j,t[j,k,v] ;
+		
+			/* visitas a depositos iniciales */
+			if i in D_start and i not in depots then {
+				let depots := depots union {i} ;
+			}
+			if j in D_start and j not in depots then {
+				let depots := depots union {j} ;
+			}
+			
+			/* visitas a depositos intermedios */
+			if i in D_in then {
+				if i -10000 not in depots then {
+					let depots := depots union {i -10000 } ;
+				}
+				if i -10000 not in depots_in then {
+					let depots_in := depots_in union {i -10000 } ;
+				}
+			}
+			if j in D_in then {
+				if j -10000 not in depots then {
+					let depots := depots union {j -10000 } ;
+				}
+				if j -10000 not in depots_in then {
+					let depots_in := depots_in union {j -10000 } ;
+				}
+			}
+			
+			/* visitas a depositos finales */
+			if i in D_end and i -100000 not in depots then {
+				let depots := depots union {i -100000 } ;
+			}
+			if j in D_end and j -100000 not in depots then {
+				let depots := depots union {j -100000 } ;
+			}
+			
+			#printf "%s %s -> (%s[%d] %s[%d])\n", k,v,i,t[i,k,v],j,t[j,k,v] ;
+			printf "%s %s %s %d\n", k,v,i,t[i,k,v] ;
+			if j in D_end then {
+				printf "%s %s %s %d\n", k,v,j,t[j,k,v] ;
+			}
 		}
-		printf "\n";
 	}
-	printf "\n";
+	
+	let number_of_rounds[k] := card (rounds) ;
+	let number_of_depots[k] := card (depots) ;
+	let number_of_depots_in[k] := card (depots_in) ;
 }
 
+printf "\n depot_to_client_distance_reduction \n" ;
+for {k in K}{
+	printf "%s %d\n", k, depot_to_client_distance_reduction[k] ;
+}
+printf "\n" ;
+
+printf "\n depot_to_client_distance_reduction_v2 \n" ;
+for {k in K, v in V}{
+	printf "%s %s %d\n", k, v, depot_to_client_distance_reduction_v2[k,v] ;
+}
+printf "\n" ;
+
+printf "%.2f ", Ttotal	;
+printf "%s "  , FO 		;
+printf "%.2f ", (FO - FO.bestbound)*100/FO  ;
+printf "%.2f ", ( sum {k in K} number_of_rounds[k] ) / card (K)	 	;
+printf "%.2f ", ( sum {k in K} number_of_depots[k] ) / card (K) 	;
+printf "%.2f ", ( sum {k in K} number_of_depots_in[k] ) / card (K) 	;
+printf "%.2f ", ( sum {k in K} depot_to_client_distance_reduction[k] ) / card (K) ;
+printf "\n" ;
+
+
+	
+	
+	
+	
